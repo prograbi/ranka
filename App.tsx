@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 
 type Screen = "reserve" | "floor" | "admin" | "checkin";
 type Status = "承諾待ち" | "承諾" | "保留" | "非承諾";
@@ -44,53 +44,29 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) { return <inp
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select {...props} className={`w-full rounded-[14px] border border-[#d6dde3] bg-white px-4 py-3 text-[15px] outline-none ${props.className ?? ""}`} />; }
 function Button({ children, className = "", variant = "black", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "black" | "hold" | "gray" }) { const cls = variant === "black" ? "bg-black text-white" : variant === "hold" ? "border border-[#ead7a5] bg-[#fff7e8] text-[#8d6a23]" : "border border-[#e4e4e7] bg-[#f4f4f5] text-[#71717a]"; return <button type="button" {...props} className={`rounded-[14px] px-5 py-3 text-[14px] font-semibold ${cls} ${className}`}>{children}</button>; }
 
-function ReservePage() { return <div className="mx-auto max-w-[760px] space-y-7"><RankaLogo /><div className="text-center"><h1 className="text-[32px] font-medium text-[#555d66]">ご予約フォーム</h1></div><Field label="お名前"><Input placeholder="山田 花子" /></Field><Field label="電話番号"><Input placeholder="090-1234-5678" /></Field><div className="grid grid-cols-2 gap-4"><Field label="来店日"><Input type="date" defaultValue="2026-04-20" /></Field><Field label="来店時間"><Select defaultValue="19:00">{RAMO_TIME_OPTIONS.map((t) => <option key={t}>{t}</option>)}</Select></Field></div><div className="grid grid-cols-2 gap-4"><Field label="大人人数"><Select defaultValue="2名">{ADULT_OPTIONS.map((n) => <option key={n}>{n}</option>)}</Select></Field><Field label="子供人数"><Select defaultValue="0名">{CHILD_OPTIONS.map((n) => <option key={n}>{n}</option>)}</Select></Field></div><Field label="席の希望"><Select defaultValue="指定なし">{SEAT_OPTIONS.map((s) => <option key={s}>{s}</option>)}</Select></Field><Field label="アレルギー"><Select><option>なし</option><option>あり</option></Select></Field><Field label="その他要望"><textarea className="min-h-[110px] w-full rounded-[14px] border border-[#d6dde3] bg-white px-4 py-3 text-[15px] outline-none" /></Field><Button className="w-full">この内容で予約する</Button></div>; }
+function ReservePage({ onSubmit }: { onSubmit: (data: ManualForm) => void }) {
+  const [form, setForm] = useState<ManualForm>({ customerName: "", phone: "", date: "2026-04-20", time: "19:00", adults: "2名", children: "0名", allergy: "なし", seat: "指定なし", plate: "なし", note: "" });
+  const set = (key: keyof ManualForm, value: string) => setForm((p) => ({ ...p, [key]: value }));
+  const submit = () => {
+    if (!form.customerName || !form.phone) return alert("お名前と電話番号は必須です");
+    onSubmit(form);
+    alert("予約申請を受け付けました。担当者が確認後、ご連絡いたします。");
+  };
+  return <div className="mx-auto max-w-[760px] space-y-7"><RankaLogo /><div className="text-center"><h1 className="text-[32px] font-medium text-[#555d66]">ご予約フォーム</h1></div><Field label="お名前"><Input value={form.customerName} onChange={(e) => set("customerName", e.target.value)} placeholder="山田 花子" /></Field><Field label="電話番号"><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="090-1234-5678" /></Field><div className="grid grid-cols-2 gap-4"><Field label="来店日"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></Field><Field label="来店時間"><Select value={form.time} onChange={(e) => set("time", e.target.value)}>{RAMO_TIME_OPTIONS.map((t) => <option key={t}>{t}</option>)}</Select></Field></div><div className="grid grid-cols-2 gap-4"><Field label="大人人数"><Select value={form.adults} onChange={(e) => set("adults", e.target.value)}>{ADULT_OPTIONS.map((n) => <option key={n}>{n}</option>)}</Select></Field><Field label="子供人数"><Select value={form.children} onChange={(e) => set("children", e.target.value)}>{CHILD_OPTIONS.map((n) => <option key={n}>{n}</option>)}</Select></Field></div><Field label="席の希望"><Select value={form.seat} onChange={(e) => set("seat", e.target.value)}>{SEAT_OPTIONS.map((s) => <option key={s}>{s}</option>)}</Select></Field><Field label="アレルギー"><Input value={form.allergy} onChange={(e) => set("allergy", e.target.value)} placeholder="なし / 例：ナッツ" /></Field><Field label="その他要望"><textarea value={form.note} onChange={(e) => set("note", e.target.value)} className="min-h-[110px] w-full rounded-[14px] border border-[#d6dde3] bg-white px-4 py-3 text-[15px] outline-none" /></Field><Button onClick={submit} className="w-full">この内容で予約する</Button></div>;
+}
 
 function FloorPage({ reservations, customers }: { reservations: Reservation[]; customers: Customer[] }) {
   const [date, setDate] = useState("2026-04-20");
+  const dateRef = useRef<HTMLInputElement>(null);
   const move = (days: number) => setDate(new Date(new Date(date).getTime() + days * 86400000).toISOString().slice(0, 10));
+  const openCalendar = () => {
+    const el = dateRef.current as HTMLInputElement & { showPicker?: () => void };
+    if (el?.showPicker) el.showPicker();
+    else el?.click();
+  };
   const list = reservations.filter((r) => r.status === "承諾" && r.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
-  return <div className="mx-auto max-w-[980px] space-y-6">
-    <RankaLogo />
-
-    <div className="flex items-center justify-between rounded-[24px] border border-[#dde2e7] bg-white px-8 py-6">
-      <button type="button" onClick={() => move(-1)} className="text-[34px] text-[#737b85]">←</button>
-
-      <div className="relative flex items-center justify-center">
-        <div className="pointer-events-none text-[34px] font-semibold text-[#4c535b]">{fmt(date)}</div>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          aria-label="日付を選択"
-        />
-      </div>
-
-      <button type="button" onClick={() => move(1)} className="text-[34px] text-[#737b85]">→</button>
-    </div>
-
-    <div className="space-y-4">
-      {list.length === 0 && <div className="rounded-[18px] bg-white p-6 text-center text-[14px] text-[#7c848d]">本日の予約はありません</div>}
-      {list.map((r) => {
-        const c = customers.find((x) => x.id === r.customerId);
-        return <div key={r.id} className={`rounded-[24px] border p-6 ${c?.caution ? "border-[#f3caca] bg-[#fff0f0]" : "border-[#dde2e7] bg-white"}`}>
-          <div className="flex justify-between gap-4">
-            <div className="text-[24px] text-[#4c535b]">{r.customerName}様</div>
-            <div className={`h-fit rounded-full border px-4 py-2 text-[12px] ${rankClass[c?.rank ?? "SILVER"]}`}>Rank: {c?.rank}</div>
-          </div>
-          <div className="mt-4 text-[16px] leading-8 text-[#6e675f]">
-            {fmt(r.date)} {r.time}<br />大人{r.adults} / 子供{r.children}<br />電話番号 {r.phone}<br />アレルギー：{r.allergy}<br />席：{r.seat} / プレート：{r.plate}<br />備考：{r.note}
-          </div>
-          <div className="mt-5 rounded-[16px] border border-[#eadfca] bg-[#fffaf0] p-4 text-[14px] leading-7 text-[#6e675f]">
-            <div>{childService(r.children)}</div>
-            <div>ランク特典：{RANK_SERVICE[c?.rank ?? "SILVER"]}</div>
-          </div>
-        </div>;
-      })}
-    </div>
-  </div>;
+  return <div className="mx-auto max-w-[980px] space-y-6"><RankaLogo /><div className="relative flex items-center justify-between rounded-[24px] border border-[#dde2e7] bg-white px-8 py-6"><button type="button" onClick={() => move(-1)} className="text-[34px] text-[#737b85]">←</button><button type="button" onClick={openCalendar} className="text-[34px] font-semibold text-[#4c535b]">{fmt(date)}</button><input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="absolute left-1/2 top-1/2 h-0 w-0 opacity-0" aria-label="日付を選択" /><button type="button" onClick={() => move(1)} className="text-[34px] text-[#737b85]">→</button></div><div className="space-y-4">{list.length === 0 && <div className="rounded-[18px] bg-white p-6 text-center text-[14px] text-[#7c848d]">本日の予約はありません</div>}{list.map((r) => { const c = customers.find((x) => x.id === r.customerId); return <div key={r.id} className={`rounded-[24px] border p-6 ${c?.caution ? "border-[#f3caca] bg-[#fff0f0]" : "border-[#dde2e7] bg-white"}`}><div className="flex justify-between gap-4"><div className="text-[24px] text-[#4c535b]">{r.customerName}様</div><div className={`h-fit rounded-full border px-4 py-2 text-[12px] ${rankClass[c?.rank ?? "SILVER"]}`}>Rank: {c?.rank}</div></div><div className="mt-4 text-[16px] leading-8 text-[#6e675f]">{fmt(r.date)} {r.time}<br />大人{r.adults} / 子供{r.children}<br />電話番号 {r.phone}<br />アレルギー：{r.allergy}<br />席：{r.seat} / プレート：{r.plate}<br />備考：{r.note}</div><div className="mt-5 rounded-[16px] border border-[#eadfca] bg-[#fffaf0] p-4 text-[14px] leading-7 text-[#6e675f]"><div>{childService(r.children)}</div><div>ランク特典：{RANK_SERVICE[c?.rank ?? "SILVER"]}</div></div></div>; })}</div></div>;
 }
 
 function AdminPage({ reservations, customers }: { reservations: Reservation[]; customers: Customer[] }) {
@@ -111,4 +87,19 @@ function AdminPage({ reservations, customers }: { reservations: Reservation[]; c
 
 function CheckinPage() { return <div className="text-center"><RankaLogo /><div className="mt-10 text-[#666]">チェックイン画面（非表示状態）</div></div>; }
 
-export default function RankaFrontPages() { const [screen, setScreen] = useState<Screen>("reserve"); const tabs: Array<[Exclude<Screen, "checkin">, string]> = [["reserve", "予約フォーム"], ["floor", "予約管理画面"], ["admin", "RANKA管理画面"]]; return <div className="min-h-screen bg-[#f3f5f7] px-4 py-8"><div className="mb-6 flex flex-wrap justify-center gap-2">{tabs.map(([key, label]) => <button key={key} type="button" onClick={() => setScreen(key)} className={`rounded-full border px-4 py-2 text-[12px] ${screen === key ? "bg-black text-white" : "bg-white text-[#5a6169]"}`}>{label}</button>)}</div><div className="mx-auto max-w-[1200px] rounded-[28px] bg-[#f7f8fa] p-6 md:p-8">{screen === "reserve" && <ReservePage />}{screen === "floor" && <FloorPage reservations={seedReservations} customers={seedCustomers} />}{screen === "admin" && <AdminPage reservations={seedReservations} customers={seedCustomers} />}{screen === "checkin" && <CheckinPage />}</div></div>; }
+export default function RankaFrontPages() {
+  const [screen, setScreen] = useState<Screen>("reserve");
+  const [reservations, setReservations] = useState<Reservation[]>(() => {
+    const saved = localStorage.getItem("ranka_reservations");
+    return saved ? JSON.parse(saved) : seedReservations;
+  });
+  useEffect(() => localStorage.setItem("ranka_reservations", JSON.stringify(reservations)), [reservations]);
+  const addReservation = (data: ManualForm) => {
+    const id = Math.max(...reservations.map((r) => r.id), 0) + 1;
+    const newItem: Reservation = { ...data, id, customerId: id, status: "承諾待ち", checkInStatus: "未チェックイン", code: code() };
+    setReservations((p) => [newItem, ...p]);
+    setScreen("admin");
+  };
+  const tabs: Array<[Exclude<Screen, "checkin">, string]> = [["reserve", "予約フォーム"], ["floor", "予約管理画面"], ["admin", "RANKA管理画面"]];
+  return <div className="min-h-screen bg-[#f3f5f7] px-4 py-8"><div className="mb-6 flex flex-wrap justify-center gap-2">{tabs.map(([key, label]) => <button key={key} type="button" onClick={() => setScreen(key)} className={`rounded-full border px-4 py-2 text-[12px] ${screen === key ? "bg-black text-white" : "bg-white text-[#5a6169]"}`}>{label}</button>)}</div><div className="mx-auto max-w-[1200px] rounded-[28px] bg-[#f7f8fa] p-6 md:p-8">{screen === "reserve" && <ReservePage onSubmit={addReservation} />}{screen === "floor" && <FloorPage reservations={reservations} customers={seedCustomers} />}{screen === "admin" && <AdminPage reservations={reservations} customers={seedCustomers} />}{screen === "checkin" && <CheckinPage />}</div></div>;
+}
